@@ -16,6 +16,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 
 @Configuration
@@ -28,17 +29,24 @@ public class SecurityConfig {
                                             OAuth2FailureHandler failureHandler,
                                             RestAuthenticationEntryPoint authenticationEntryPoint,
                                             RestAccessDeniedHandler accessDeniedHandler,
+                                            LoadTestHeaderAuthenticationFilter loadTestAuthenticationFilter,
                                             ObjectMapper objectMapper,
                                             @Value("${app.observability.public-metrics:false}")
-                                            boolean publicMetrics) throws Exception {
+                                            boolean publicMetrics,
+                                            @Value("${app.load-test.enabled:false}")
+                                            boolean loadTestEnabled) throws Exception {
         CookieCsrfTokenRepository csrfRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
         csrfRepository.setCookiePath("/");
 
         http
                 .cors(Customizer.withDefaults())
-                .csrf(csrf -> csrf
-                        .csrfTokenRepository(csrfRepository)
-                        .ignoringRequestMatchers("/h2-console/**", "/api/v1/device-pairings/claim/**", "/api/v1/device/**"))
+                .csrf(csrf -> {
+                    csrf.csrfTokenRepository(csrfRepository)
+                            .ignoringRequestMatchers("/h2-console/**", "/api/v1/device-pairings/claim/**", "/api/v1/device/**");
+                    if (loadTestEnabled) {
+                        csrf.ignoringRequestMatchers("/api/v1/me/**");
+                    }
+                })
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
                 .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
                 .authorizeHttpRequests(auth -> {
@@ -82,7 +90,8 @@ public class SecurityConfig {
                             response.setCharacterEncoding("UTF-8");
                             objectMapper.writeValue(response.getWriter(), ApiResponse.ok(null, "로그아웃되었습니다."));
                         })
-                );
+                )
+                .addFilterBefore(loadTestAuthenticationFilter, AnonymousAuthenticationFilter.class);
 
         return http.build();
     }

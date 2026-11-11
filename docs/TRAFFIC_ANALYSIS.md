@@ -1,5 +1,11 @@
 # 말모아 Traffic 분석 및 부하 테스트
 
+> H2 예비 결과: [`LOAD_TEST_RESULTS_2026-10-28.md`](./LOAD_TEST_RESULTS_2026-10-28.md)
+>
+> PostgreSQL 분리 프로세스 결과: [`LOAD_TEST_ONE_PAGE_SUMMARY.md`](./LOAD_TEST_ONE_PAGE_SUMMARY.md)
+>
+> 전체 기능 혼합 및 SSE 결과: [`FULL_SERVICE_LOAD_TEST_2026-10-29.md`](./FULL_SERVICE_LOAD_TEST_2026-10-29.md)
+
 ## 현재 구현된 계측 기반
 
 - Spring Boot Actuator
@@ -29,12 +35,24 @@ hikaricp_connections_active
 
 ## 1차 부하 테스트 실행
 
-### 준비
+현재는 특정 외부 부하 도구를 최종 선정하지 않았다. 실제 첫 기준선은 프로젝트 안의 독립 실행형 Spring Boot Test와 JDK `HttpClient`로 실행했다. k6 Script는 외부 부하 발생기를 사용할 때의 후보로 유지한다.
 
-1. 테스트 전용 AAC 사용자와 Device를 Pairing한다.
-2. 각 가상 사용자에 대응하는 Device Token을 준비한다.
-3. 운영 개인정보와 운영 DB를 사용하지 않는다.
-4. k6를 설치한다. 도구 선정은 최종 확정이 아니며 현재 Script는 1차 기준선 측정용이다.
+### 도구 설치 없이 로컬 기준선 실행
+
+```powershell
+.\mvnw.cmd -Pload-test test `
+  "-Dload.users=1,10,100,1000" `
+  "-Dload.duration.seconds=30" `
+  "-Dload.request.timeout.seconds=10"
+```
+
+이 실행은 테스트 전용 사용자·기기·Token을 자동 생성하고 실제 HTTP Endpoint를 호출한다. 결과는 `target/load-test-results`에 생성된다. H2와 Localhost를 사용하는 개발 기준선이므로 운영 용량 판정에는 PostgreSQL과 분리된 부하 발생 환경이 추가로 필요하다.
+
+### PostgreSQL 분리 프로세스 시험
+
+`scripts/load/prepare-postgres-load.mjs`가 테스트 전용 사용자·기기·Token SQL을 만들고, `scripts/load/device-traffic-node.mjs`가 별도 Node.js 프로세스에서 실제 HTTP 요청을 보낸다. Token 원문과 실행 결과는 Git에서 제외되는 `target` 아래에 저장한다.
+
+이번 실행에서는 750개 기기까지 임시 기준을 통과했고 1,000개 기기는 오류율 2.16%, P95 5.26초로 실패했다. 따라서 1,000개 10분 시험은 진행하지 않고 병목 개선 후 재시험한다.
 
 ### 1명 기준
 
