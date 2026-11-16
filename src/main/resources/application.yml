@@ -45,6 +45,7 @@ spring:
 
 app:
   frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:3000}
+  frontend-allowed-origins: ${FRONTEND_ALLOWED_ORIGINS:${FRONTEND_BASE_URL:http://localhost:3000}}
   pairing:
     qr-prefix: ${PAIRING_QR_PREFIX:malmoa://pair?token=}
   media:

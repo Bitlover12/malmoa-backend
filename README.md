@@ -19,6 +19,7 @@
 $env:GOOGLE_CLIENT_ID="..."
 $env:GOOGLE_CLIENT_SECRET="..."
 $env:FRONTEND_BASE_URL="http://localhost:3000"
+$env:FRONTEND_ALLOWED_ORIGINS="http://localhost:3000,http://localhost:3001"
 .\mvnw.cmd spring-boot:run
 ```
 
