@@ -38,20 +38,30 @@ public class AuthService {
 
     @Transactional
     public Account upsertGoogleAccount(String providerSubject, String email, String name, String profileImageUrl) {
-        String normalizedSubject = requireText(providerSubject, "구글 사용자 식별값이 없습니다.");
-        String normalizedEmail = requireText(email, "구글 이메일 정보가 없습니다.").toLowerCase();
+        return upsertSocialAccount(OAuthProvider.GOOGLE, providerSubject, email, name, profileImageUrl);
+    }
+
+    @Transactional
+    public Account upsertKakaoAccount(String providerSubject, String email, String name, String profileImageUrl) {
+        return upsertSocialAccount(OAuthProvider.KAKAO, providerSubject, email, name, profileImageUrl);
+    }
+
+    private Account upsertSocialAccount(OAuthProvider provider, String providerSubject,
+                                        String email, String name, String profileImageUrl) {
+        String normalizedSubject = requireText(providerSubject, "소셜 로그인 사용자 식별값이 없습니다.");
+        String normalizedEmail = requireText(email, "소셜 로그인 이메일 정보가 없습니다.").toLowerCase(java.util.Locale.ROOT);
         String normalizedName = name == null || name.isBlank() ? normalizedEmail : name.trim();
         String normalizedImage = normalize(profileImageUrl);
 
         return oauthAccountRepository
-                .findByProviderAndProviderSubject(OAuthProvider.GOOGLE, normalizedSubject)
+                .findByProviderAndProviderSubject(provider, normalizedSubject)
                 .map(oauthAccount -> {
                     Account account = oauthAccount.getAccount();
                     account.updateSocialProfile(normalizedEmail, normalizedName, normalizedImage);
                     oauthAccount.updateProviderEmail(normalizedEmail);
                     return account;
                 })
-                .orElseGet(() -> createGoogleAccount(normalizedSubject, normalizedEmail,
+                .orElseGet(() -> createSocialAccount(provider, normalizedSubject, normalizedEmail,
                         normalizedName, normalizedImage));
     }
 
@@ -99,13 +109,14 @@ public class AuthService {
         return AccountResponse.from(account);
     }
 
-    private Account createGoogleAccount(String providerSubject, String email, String name, String profileImageUrl) {
+    private Account createSocialAccount(OAuthProvider provider, String providerSubject,
+                                        String email, String name, String profileImageUrl) {
+        // Never link two providers by matching email alone: email does not prove account ownership.
         if (accountRepository.existsByEmailIgnoreCase(email)) {
             throw new ConflictException("동일한 이메일의 계정이 이미 다른 로그인 식별자에 연결되어 있습니다.");
         }
         Account account = accountRepository.save(Account.createSocialAccount(email, name, profileImageUrl));
-        oauthAccountRepository.save(OAuthAccount.create(
-                account, OAuthProvider.GOOGLE, providerSubject, email));
+        oauthAccountRepository.save(OAuthAccount.create(account, provider, providerSubject, email));
         return account;
     }
 

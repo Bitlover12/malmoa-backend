@@ -19,19 +19,39 @@ public class CustomOidcUserService {
 
     public OidcUser loadUser(OidcUserRequest userRequest) throws OAuth2AuthenticationException {
         OidcUser user = delegate.loadUser(userRequest);
-        if (!Boolean.TRUE.equals(user.getClaimAsBoolean("email_verified"))) {
+        String registrationId = userRequest.getClientRegistration().getRegistrationId();
+        if (!Boolean.TRUE.equals(user.getClaimAsBoolean("email_verified"))
+                || user.getClaimAsString("email") == null
+                || user.getClaimAsString("email").isBlank()) {
+            // Account.email and OAuthAccount.providerEmail are non-null and unique.
+            // Require a verified consented email rather than fabricating one or
+            // silently linking to a different social identity.
             throw new OAuth2AuthenticationException(
                     new OAuth2Error("unverified_email"),
-                    "인증되지 않은 구글 이메일입니다."
+                    "인증된 이메일 제공 동의가 필요합니다."
             );
         }
 
-        authService.upsertGoogleAccount(
-                user.getSubject(),
-                user.getClaimAsString("email"),
-                user.getClaimAsString("name"),
-                user.getClaimAsString("picture")
-        );
+        if ("google".equals(registrationId)) {
+            authService.upsertGoogleAccount(
+                    user.getSubject(),
+                    user.getClaimAsString("email"),
+                    user.getClaimAsString("name"),
+                    user.getClaimAsString("picture")
+            );
+        } else if ("kakao".equals(registrationId)) {
+            authService.upsertKakaoAccount(
+                    user.getSubject(),
+                    user.getClaimAsString("email"),
+                    user.getClaimAsString("nickname"),
+                    user.getClaimAsString("picture")
+            );
+        } else {
+            throw new OAuth2AuthenticationException(
+                    new OAuth2Error("unsupported_provider"),
+                    "지원하지 않는 로그인 제공자입니다."
+            );
+        }
         return user;
     }
 }

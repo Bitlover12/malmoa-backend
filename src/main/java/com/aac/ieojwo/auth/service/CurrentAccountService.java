@@ -17,16 +17,34 @@ public class CurrentAccountService {
         this.oauthAccountRepository = oauthAccountRepository;
     }
 
-    public Account requireGoogleAccount(OidcUser principal) {
+    public Account requireSocialAccount(OidcUser principal) {
         if (principal == null || principal.getSubject() == null) {
             throw new UnauthorizedException("로그인이 필요합니다.");
         }
 
+        // Spring Security validates the OIDC ID token before creating this principal.
+        String issuer = principal.getClaimAsString("iss");
+        OAuthProvider provider;
+        if ("https://kauth.kakao.com".equals(issuer)) {
+            provider = OAuthProvider.KAKAO;
+        } else if (issuer == null || "https://accounts.google.com".equals(issuer)
+                || "accounts.google.com".equals(issuer)) {
+            // A missing issuer is only used by the existing synthetic load-test principal.
+            provider = OAuthProvider.GOOGLE;
+        } else {
+            throw new UnauthorizedException("지원하지 않는 로그인 제공자입니다.");
+        }
+
         Account account = oauthAccountRepository
-                .findByProviderAndProviderSubject(OAuthProvider.GOOGLE, principal.getSubject())
+                .findByProviderAndProviderSubject(provider, principal.getSubject())
                 .map(oauthAccount -> oauthAccount.getAccount())
                 .orElseThrow(() -> new UnauthorizedException("로그인 계정을 찾을 수 없습니다."));
         if (account.getStatus() != AccountStatus.ACTIVE) throw new UnauthorizedException("사용할 수 없는 계정입니다.");
         return account;
+    }
+
+    /** Compatibility alias for existing guardian controllers. Supports both OIDC providers. */
+    public Account requireGoogleAccount(OidcUser principal) {
+        return requireSocialAccount(principal);
     }
 }
