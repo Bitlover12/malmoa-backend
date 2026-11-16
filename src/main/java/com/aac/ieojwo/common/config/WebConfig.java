@@ -11,7 +11,9 @@ public class WebConfig implements WebMvcConfigurer {
     private final String frontendBaseUrl;
 
     public WebConfig(@Value("${app.frontend-base-url:http://localhost:3000}") String frontendBaseUrl) {
-        this.frontendBaseUrl = frontendBaseUrl;
+        this.frontendBaseUrl = frontendBaseUrl.endsWith("/")
+                ? frontendBaseUrl.substring(0, frontendBaseUrl.length() - 1)
+                : frontendBaseUrl;
     }
 
     @Override
