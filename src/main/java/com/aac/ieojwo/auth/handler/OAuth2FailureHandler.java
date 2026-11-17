@@ -5,13 +5,18 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 import org.springframework.stereotype.Component;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
 @Component
 public class OAuth2FailureHandler implements AuthenticationFailureHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(OAuth2FailureHandler.class);
 
     private final String frontendBaseUrl;
 
@@ -29,6 +34,10 @@ public class OAuth2FailureHandler implements AuthenticationFailureHandler {
             HttpServletResponse response,
             AuthenticationException exception
     ) throws IOException, ServletException {
-        response.sendRedirect(frontendBaseUrl + "/login?error=oauth_failed");
+        String errorCode = exception instanceof OAuth2AuthenticationException oauthException
+                ? oauthException.getError().getErrorCode()
+                : exception.getClass().getSimpleName();
+        log.warn("OAuth2 login failed: requestUri={}, errorCode={}", request.getRequestURI(), errorCode);
+        response.sendRedirect(frontendBaseUrl + "/welcome?error=oauth_failed");
     }
 }

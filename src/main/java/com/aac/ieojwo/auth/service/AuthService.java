@@ -14,6 +14,10 @@ import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Locale;
+import java.util.UUID;
+
 @Service
 @Transactional(readOnly = true)
 public class AuthService {
@@ -43,13 +47,19 @@ public class AuthService {
 
     @Transactional
     public Account upsertKakaoAccount(String providerSubject, String email, String name, String profileImageUrl) {
-        return upsertSocialAccount(OAuthProvider.KAKAO, providerSubject, email, name, profileImageUrl);
+        String normalizedSubject = requireText(providerSubject, "카카오 로그인 사용자 식별값이 없습니다.");
+        String effectiveEmail = email == null || email.isBlank()
+                ? kakaoFallbackEmail(normalizedSubject)
+                : email;
+        String effectiveName = name == null || name.isBlank() ? "카카오 사용자" : name;
+        return upsertSocialAccount(OAuthProvider.KAKAO, normalizedSubject, effectiveEmail,
+                effectiveName, profileImageUrl);
     }
 
     private Account upsertSocialAccount(OAuthProvider provider, String providerSubject,
                                         String email, String name, String profileImageUrl) {
         String normalizedSubject = requireText(providerSubject, "소셜 로그인 사용자 식별값이 없습니다.");
-        String normalizedEmail = requireText(email, "소셜 로그인 이메일 정보가 없습니다.").toLowerCase(java.util.Locale.ROOT);
+        String normalizedEmail = requireText(email, "소셜 로그인 이메일 정보가 없습니다.").toLowerCase(Locale.ROOT);
         String normalizedName = name == null || name.isBlank() ? normalizedEmail : name.trim();
         String normalizedImage = normalize(profileImageUrl);
 
@@ -57,7 +67,11 @@ public class AuthService {
                 .findByProviderAndProviderSubject(provider, normalizedSubject)
                 .map(oauthAccount -> {
                     Account account = oauthAccount.getAccount();
-                    account.updateSocialProfile(normalizedEmail, normalizedName, normalizedImage);
+                    String accountEmail = accountRepository.findByEmailIgnoreCase(normalizedEmail)
+                            .filter(existing -> !existing.getId().equals(account.getId()))
+                            .map(existing -> account.getEmail())
+                            .orElse(normalizedEmail);
+                    account.updateSocialProfile(accountEmail, normalizedName, normalizedImage);
                     oauthAccount.updateProviderEmail(normalizedEmail);
                     return account;
                 })
@@ -129,5 +143,11 @@ public class AuthService {
 
     private String normalize(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private String kakaoFallbackEmail(String providerSubject) {
+        UUID stableId = UUID.nameUUIDFromBytes(
+                ("kakao:" + providerSubject).getBytes(StandardCharsets.UTF_8));
+        return "kakao-" + stableId + "@oauth.malmoa.local";
     }
 }

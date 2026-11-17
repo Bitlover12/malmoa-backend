@@ -2,6 +2,7 @@ package com.aac.ieojwo;
 
 import com.aac.ieojwo.account.domain.Account;
 import com.aac.ieojwo.account.domain.AccountType;
+import com.aac.ieojwo.account.domain.OAuthProvider;
 import com.aac.ieojwo.account.repository.AccountRepository;
 import com.aac.ieojwo.account.repository.OAuthAccountRepository;
 import com.aac.ieojwo.auth.dto.OnboardingRequest;
@@ -83,6 +84,24 @@ class ApiIntegrationTests {
         assertThat(account.getEmail()).isEqualTo("updated@example.com");
         assertThat(account.getName()).isEqualTo("새 이름");
         assertThat(account.isOnboardingCompleted()).isFalse();
+    }
+
+    @Test
+    void kakaoAccountUsesStableInternalEmailWhenProviderOmitsEmail() {
+        long accountCount = accountRepository.count();
+        long oauthAccountCount = oauthAccountRepository.count();
+
+        Account first = authService.upsertKakaoAccount("kakao-without-email", null, null, null);
+        Account second = authService.upsertKakaoAccount(
+                "kakao-without-email", null, "카카오 사용자 새 이름", "https://example.com/kakao.png");
+
+        assertThat(second.getId()).isEqualTo(first.getId());
+        assertThat(second.getEmail()).matches("kakao-[0-9a-f-]{36}@oauth\\.malmoa\\.local");
+        assertThat(second.getName()).isEqualTo("카카오 사용자 새 이름");
+        assertThat(accountRepository.count()).isEqualTo(accountCount + 1);
+        assertThat(oauthAccountRepository.count()).isEqualTo(oauthAccountCount + 1);
+        assertThat(oauthAccountRepository.findByProviderAndProviderSubject(
+                OAuthProvider.KAKAO, "kakao-without-email")).isPresent();
     }
 
     @Test

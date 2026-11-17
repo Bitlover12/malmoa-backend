@@ -20,19 +20,14 @@ public class CustomOidcUserService {
     public OidcUser loadUser(OidcUserRequest userRequest) throws OAuth2AuthenticationException {
         OidcUser user = delegate.loadUser(userRequest);
         String registrationId = userRequest.getClientRegistration().getRegistrationId();
-        if (!Boolean.TRUE.equals(user.getClaimAsBoolean("email_verified"))
-                || user.getClaimAsString("email") == null
-                || user.getClaimAsString("email").isBlank()) {
-            // Account.email and OAuthAccount.providerEmail are non-null and unique.
-            // Require a verified consented email rather than fabricating one or
-            // silently linking to a different social identity.
-            throw new OAuth2AuthenticationException(
-                    new OAuth2Error("unverified_email"),
-                    "인증된 이메일 제공 동의가 필요합니다."
-            );
-        }
 
         if ("google".equals(registrationId)) {
+            if (!hasVerifiedEmail(user)) {
+                throw new OAuth2AuthenticationException(
+                        new OAuth2Error("unverified_email"),
+                        "인증된 이메일 제공 동의가 필요합니다."
+                );
+            }
             authService.upsertGoogleAccount(
                     user.getSubject(),
                     user.getClaimAsString("email"),
@@ -42,7 +37,7 @@ public class CustomOidcUserService {
         } else if ("kakao".equals(registrationId)) {
             authService.upsertKakaoAccount(
                     user.getSubject(),
-                    user.getClaimAsString("email"),
+                    hasVerifiedEmail(user) ? user.getClaimAsString("email") : null,
                     user.getClaimAsString("nickname"),
                     user.getClaimAsString("picture")
             );
@@ -53,5 +48,11 @@ public class CustomOidcUserService {
             );
         }
         return user;
+    }
+
+    private boolean hasVerifiedEmail(OidcUser user) {
+        String email = user.getClaimAsString("email");
+        return Boolean.TRUE.equals(user.getClaimAsBoolean("email_verified"))
+                && email != null && !email.isBlank();
     }
 }
